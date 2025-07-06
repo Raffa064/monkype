@@ -1,12 +1,13 @@
-#include <ncurses.h>
+#include <locale.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <string.h>
 #include <time.h>
 #include <wchar.h>
 
+#include <ncursesw/ncurses.h>
+
 #define MAX_WORDS 1000000
-#define MAX_WORD_LENGTH 11
+#define MAX_WORD_LENGTH 40
 
 #define KEY_1 L'1'
 #define KEY_2 L'2'
@@ -18,7 +19,7 @@
 
 typedef struct timespec timespec;
 
-char DATASET[MAX_WORDS][MAX_WORD_LENGTH];
+wchar_t DATASET[MAX_WORDS][MAX_WORD_LENGTH];
 
 enum {
   HEADER = 1,
@@ -33,8 +34,8 @@ enum {
 
 typedef struct {
   int word_count;
-  char **wordset;
-  char **u_wordset;
+  wchar_t **wordset;
+  wchar_t **u_wordset;
   int u_word;
   int u_idx;
 } session_data;
@@ -78,6 +79,7 @@ void setup_ncurses() {
   keypad(stdscr, TRUE);
   curs_set(0);
   nodelay(stdscr, TRUE);
+  setlocale(LC_ALL, "");
 
   start_color();
 
@@ -100,18 +102,18 @@ int load_dataset(char *path) {
   }
 
   int i = 0;
-  char word[MAX_WORD_LENGTH];
-  while (fgets(word, sizeof(word), file)) {
-    int len = strcspn(word, "\n");
-    word[len] = '\0';
+  wchar_t word[MAX_WORD_LENGTH];
+  while (fgetws(word, sizeof(word) / sizeof(wchar_t), file)) {
+    int len = wcscspn(word, L"\n"); // strcspn
+    word[len] = L'\0';
 
     if (len < MAX_WORD_LENGTH)
-      strcpy(DATASET[i++], word);
+      wcscpy(DATASET[i++], word);
     else
-      printf("Skipping large word: '%s'\n", word);
+      wprintf(L"Skipping large word: '%ls'\n", word);
 
     if (i >= MAX_WORDS) {
-      printf("Exceed word limit, dataset trucated at %d words\n", i);
+      wprintf(L"Exceed word limit, dataset trucated at %d words\n", i);
       break;
     }
   }
@@ -119,21 +121,21 @@ int load_dataset(char *path) {
   return i;
 }
 
-void draw_center_text(int x, int y, int w, char *text) {
-  int len = strlen(text);
+void draw_center_text(int x, int y, int w, wchar_t *text) {
+  int len = wcslen(text);
   int ox = (w - len) / 2;
 
-  mvprintw(y, x + ox, "%s", text);
+  mvprintw(y, x + ox, "%ls", text);
 }
 
 void draw_header(int x, int y, int w, int paused) {
   int color = paused ? HEADER_PAUSED : HEADER;
-  char *title = paused ? "~ Paused ~" : "MONKYPE v1.0";
+  wchar_t *title = paused ? L"~ Paused ~" : L"MONKYPE v1.0";
 
   attron(COLOR_PAIR(color));
 
   for (int i = 0; i < w - 1; i++)
-    mvaddch(y, x + i, ' ');
+    mvaddch(y, x + i, L' ');
 
   draw_center_text(x, y, w, title);
 
@@ -145,11 +147,11 @@ int draw_session(const session_data session, int x, int y, int w) {
   int ox = 0;
   int oy = 0;
   for (int i = 0; i < session.word_count; i++) {
-    char *word = session.wordset[i];
-    char *u_word = session.u_wordset[i];
+    wchar_t *word = session.wordset[i];
+    wchar_t *u_word = session.u_wordset[i];
 
-    int len = strlen(word);
-    int u_len = strlen(u_word);
+    int len = wcslen(word);
+    int u_len = wcslen(u_word);
     int max_len = MAX(len, u_len);
 
     // word wrap
@@ -159,7 +161,7 @@ int draw_session(const session_data session, int x, int y, int w) {
     }
 
     for (int j = 0; j < max_len; j++) {
-      char ch = word[j];
+      wchar_t ch = word[j];
       int color = GHOST;
 
       int changed_by_used =
@@ -182,7 +184,7 @@ int draw_session(const session_data session, int x, int y, int w) {
         color = CURSOR;
 
       attron(COLOR_PAIR(color));
-      mvaddch(x + oy, y + ox + j, ch);
+      mvprintw(x + oy, y + ox + j, "%lc", ch);
       attroff(COLOR_PAIR(color));
     }
 
@@ -228,8 +230,8 @@ stats run_session(char *dataset_path, int seed, int word_count,
                   int target_fps) {
   session_data session;
   session.word_count = word_count;
-  session.wordset = malloc(sizeof(char *) * word_count);
-  session.u_wordset = malloc(sizeof(char *) * word_count);
+  session.wordset = malloc(sizeof(wchar_t *) * word_count);
+  session.u_wordset = malloc(sizeof(wchar_t *) * word_count);
   session.u_word = 0;
   session.u_idx = 0;
 
@@ -237,7 +239,7 @@ stats run_session(char *dataset_path, int seed, int word_count,
   int dataset_length = load_dataset(dataset_path);
   for (int i = 0; i < word_count; i++) {
     session.wordset[i] = DATASET[rand() % dataset_length];
-    session.u_wordset[i] = calloc(MAX_WORD_LENGTH, 1);
+    session.u_wordset[i] = calloc(MAX_WORD_LENGTH, sizeof(wchar_t));
   }
 
   setup_ncurses();
@@ -252,17 +254,15 @@ stats run_session(char *dataset_path, int seed, int word_count,
   timespec start, end;
   clock_gettime(CLOCK_MONOTONIC, &start);
 
-  wchar_t input, last_input;
+  wchar_t /*old*/ input, last_input;
 
   int running = 1;
   int paused = 1;
   int debug = 0;
   while (running) {
-    input = getch();
-    int just_press = input != last_input;
-
-    if (input != ERR) {
-      char *target_word = session.wordset[session.u_word];
+    if (get_wch(&input) != ERR) {
+      int just_press = input != last_input;
+      wchar_t *target_word = session.wordset[session.u_word];
 
       if (input == KEY_1 && just_press)
         running = 0;
@@ -277,7 +277,7 @@ stats run_session(char *dataset_path, int seed, int word_count,
         }
 
         if (input == KEY_SPACE && just_press) {
-          int len_diff = session.u_idx - strlen(target_word);
+          int len_diff = session.u_idx - wcslen(target_word);
 
           if (len_diff >= 0)
             stats.extra += len_diff;
@@ -292,7 +292,7 @@ stats run_session(char *dataset_path, int seed, int word_count,
             session.u_idx = MAX(0, session.u_idx - 1);
           }
         } else {
-          if (session.u_idx >= strlen(target_word)) {
+          if (session.u_idx >= wcslen(target_word)) {
             stats.incorrect++;
           } else {
             if (target_word[session.u_idx] == input)
@@ -308,7 +308,7 @@ stats run_session(char *dataset_path, int seed, int word_count,
         }
 
         int is_session_complete = session.u_word == word_count - 1 &&
-                                  session.u_idx == strlen(target_word);
+                                  session.u_idx == wcslen(target_word);
         if (session.u_word >= word_count || is_session_complete)
           running = 0;
       }
@@ -333,7 +333,7 @@ stats run_session(char *dataset_path, int seed, int word_count,
 
     if (paused) {
       int y = MIN(rows + 4, h - 3);
-      draw_center_text(0, y, w, " Paused, click any key to return ");
+      draw_center_text(0, y, w, L" Paused, click any key to return ");
     } else {
       stats.time += dt;
     }
