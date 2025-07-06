@@ -2,7 +2,6 @@
 
 # This is script is intent to convert monkeytype language json files to a simple words.txt with single word per line
 
-
 import sys
 import json
 
@@ -15,7 +14,7 @@ with open("./words.txt", "w") as words:
     with open(input, "r") as jsonFile:
         data = json.load(jsonFile)
 
-        print("Converting %s..." % (data["name"]))
+        print("Converting '%s' dataset..." % (data["name"]))
 
         max_len = 0
         for word in data["words"]:
@@ -23,3 +22,7 @@ with open("./words.txt", "w") as words:
             max_len = max(max_len, len(word))
 
         print("Max word length: %d" % (max_len))
+
+        print("Replace these macros at the top of main.c:\n")
+        print("#define MAX_WORDS %d" % (len(data["words"])))
+        print("#define MAX_WORD_LENGTH %d" % (max_len))

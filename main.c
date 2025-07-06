@@ -5,16 +5,16 @@
 #include <time.h>
 #include <wchar.h>
 
-#define MAX_WORDS 451435
-#define MAX_WORD_LENGTH 50
+#define MAX_WORDS 1000000
+#define MAX_WORD_LENGTH 11
 
 #define KEY_1 L'1'
 #define KEY_2 L'2'
 #define KEY_SPACE L' '
 #define KEY_ESC 27
 
-#define MIN(a, b) a < b ? a : b
-#define MAX(a, b) a > b ? a : b
+#define MIN(a, b) ((a) < (b) ? (a) : (b))
+#define MAX(a, b) ((a) > (b) ? (a) : (b))
 
 typedef struct timespec timespec;
 
@@ -93,6 +93,11 @@ void setup_ncurses() {
 
 int load_dataset(char *path) {
   FILE *file = fopen(path, "r");
+
+  if (!file) {
+    perror("Failed to open dataset");
+    exit(1);
+  }
 
   int i = 0;
   char word[MAX_WORD_LENGTH];
