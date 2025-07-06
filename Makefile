@@ -1,5 +1,5 @@
 CC = gcc
-CFLAGS = -Wall -Wextra -pedantic -std=c99 -g
+CFLAGS = -D_POSIX_C_SOURCE=200809L -Wall -pedantic -std=c99 -g
 LIBS = -lncurses
 TARGET = monkype
 
