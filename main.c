@@ -15,6 +15,7 @@
 #define KEY_1 L'1'
 #define KEY_2 L'2'
 #define KEY_3 L'3'
+#define KEY_4 L'4'
 #define KEY_SPACE L' '
 #define KEY_ESC 27
 
@@ -255,13 +256,33 @@ void draw_info(int x, int y, int show_word, wchar_t *word, int show_fps,
     printw("%.2f FPS", 1. / dt);
 }
 
-void draw_stats(stats stats, int x, int y) {
+int lg10(int n) {
+  int i = 0;
+
+  while (n > 0) {
+    n /= 10;
+    i++;
+  }
+
+  return i;
+}
+
+void draw_stats(stats stats, int x, int y, int w) {
   double wpm = get_wpm_stat(stats);
   double accuracy = get_accuracy_stat(stats);
 
   reverse({
     c_mvprintw(HEADER, y, x, "WPM: %.1f ACC: %.1f%% %.1fs ", wpm, accuracy,
                stats.time);
+
+    int n = 3; // spacing
+    int len = MAX(3, lg10((double)stats.correct)) +
+              MAX(3, lg10((double)stats.incorrect)) +
+              MAX(3, lg10((double)stats.missed)) +
+              MAX(3, lg10((double)stats.extra)) + n * 4;
+
+    move(y, w - len);
+
     c_printw(CORRECT, " %.3d ", stats.correct);
     more_relative(x, y, 1, 0);
     c_printw(INCORRECT, " %.3d ", stats.incorrect);
@@ -318,15 +339,29 @@ stats run_session(options opt) {
     if (ktype != ERR) {
       int target_len = wcslen(target_word);
 
-      if (key == KEY_1)
+      if (key == KEY_ESC)
+        paused = 1;
+      else if (key == KEY_1)
         running = 0;
       else if (key == KEY_2)
         show_word = !show_word;
       else if (key == KEY_3)
         show_fps = !show_fps;
-      else if (key == KEY_ESC)
+      else if (key == KEY_4) {
+        session.u_word = 0;
+        session.u_idx = 0;
+
+        for (int i = 0; i < opt.word_count; i++)
+          memset(session.u_wordset[i], 0, MAX_WORD_LENGTH * sizeof(wchar_t));
+
+        stats.correct = 0;
+        stats.incorrect = 0;
+        stats.missed = 0;
+        stats.extra = 0;
+        stats.time = 0;
+
         paused = 1;
-      else {
+      } else {
         if (paused && !is_special_key) {
           paused = 0;
           clock_gettime(CLOCK_MONOTONIC, &start); // reset timer
@@ -386,7 +421,7 @@ stats run_session(options opt) {
 
     draw_header(0, 0, w, paused);
     draw_info(1, h - 2, show_word, target_word, show_fps, dt);
-    draw_stats(stats, 1, h - 1);
+    draw_stats(stats, 1, h - 1, w);
 
     if (paused) {
       colored(HEADER, { draw_center_text(0, h - 3, w, L" Paused "); })
@@ -483,6 +518,6 @@ int main(int argc, char **argv) {
   printf("  WPM: %.1f\n", wpm);
   printf("  Accuracy: %.1f%%\n", accuracy);
   printf("  Time: %.1fs\n", stats.time);
-  printf("  Result: %d/%d/%d/%d", stats.correct, stats.incorrect, stats.missed,
-         stats.extra);
+  printf("  C/I/M/E: %d/%d/%d/%d\n", stats.correct, stats.incorrect,
+         stats.missed, stats.extra);
 }
