@@ -1,10 +1,13 @@
+#define NCURSES_WIDECHAR 1
+#define _POSIX_C_SOURCE 200809L
+
 #include <locale.h>
+#include <ncursesw/ncurses.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <time.h>
 #include <wchar.h>
-
-#include <ncursesw/ncurses.h>
 
 #define MAX_WORDS 1000000
 #define MAX_WORD_LENGTH 40
@@ -14,8 +17,34 @@
 #define KEY_SPACE L' '
 #define KEY_ESC 27
 
+#define IS_BACKSPACE(key) (key == KEY_BACKSPACE || key == 127 || key == 8)
+
 #define MIN(a, b) ((a) < (b) ? (a) : (b))
 #define MAX(a, b) ((a) > (b) ? (a) : (b))
+
+#define colored(color, code)                                                   \
+  {                                                                            \
+    attron(COLOR_PAIR(color));                                                 \
+    code;                                                                      \
+    attroff(COLOR_PAIR(color));                                                \
+  }
+
+#define c_mvprintw(color, y, x, pattern, ...)                                  \
+  colored(color, mvprintw(y, x, pattern, __VA_ARGS__))
+
+#define c_printw(color, pattern, ...)                                          \
+  colored(color, printw(pattern, __VA_ARGS__))
+
+#define more_relative(x, y, dx, dy)                                            \
+  getyx(stdscr, y, x);                                                         \
+  move(y + dy, x + dx);
+
+#define reverse(code)                                                          \
+  {                                                                            \
+    attron(A_REVERSE);                                                         \
+    code;                                                                      \
+    attroff(A_REVERSE);                                                        \
+  }
 
 typedef struct timespec timespec;
 
@@ -47,6 +76,40 @@ typedef struct {
   int extra;
   double time;
 } stats;
+
+typedef struct {
+  int seed;
+  int word_count;
+  int target_fps;
+  char *dataset_path;
+  char *export_path;
+} options;
+
+options get_cmdline_options(int argc, char **argv) {
+  options opt;
+  opt.seed = time(NULL);
+  opt.word_count = 10;
+  opt.target_fps = 60;
+  opt.dataset_path = "./words.txt";
+  opt.export_path = NULL;
+
+  for (int i = 1; i < argc; i++) {
+    char *cmd = argv[i];
+
+    if (strcmp(cmd, "-s") == 0)
+      opt.seed = strtol(argv[++i], NULL, 10);
+    else if (strcmp(cmd, "-w") == 0)
+      opt.word_count = strtol(argv[++i], NULL, 10);
+    else if (strcmp(cmd, "-f") == 0)
+      opt.target_fps = strtol(argv[++i], NULL, 10);
+    else if (strcmp(cmd, "-d") == 0)
+      opt.dataset_path = argv[++i];
+    else if (strcmp(cmd, "-e") == 0)
+      opt.export_path = argv[++i];
+  }
+
+  return opt;
+}
 
 double get_wpm_stat(stats stats) {
   if (stats.time == 0)
@@ -130,16 +193,14 @@ void draw_center_text(int x, int y, int w, wchar_t *text) {
 
 void draw_header(int x, int y, int w, int paused) {
   int color = paused ? HEADER_PAUSED : HEADER;
-  wchar_t *title = paused ? L"~ Paused ~" : L"MONKYPE v1.0";
+  wchar_t *title = L"MONKYPE v1.0";
 
-  attron(COLOR_PAIR(color));
+  colored(color, {
+    for (int i = 0; i < w - 1; i++)
+      mvaddch(y, x + i, L' ');
 
-  for (int i = 0; i < w - 1; i++)
-    mvaddch(y, x + i, L' ');
-
-  draw_center_text(x, y, w, title);
-
-  attroff(COLOR_PAIR(color));
+    draw_center_text(x, y, w, title);
+  })
 }
 
 int draw_session(const session_data session, int x, int y, int w) {
@@ -160,7 +221,7 @@ int draw_session(const session_data session, int x, int y, int w) {
       oy++;
     }
 
-    for (int j = 0; j < max_len; j++) {
+    for (int j = 0; j <= max_len; j++) {
       wchar_t ch = word[j];
       int color = GHOST;
 
@@ -171,21 +232,28 @@ int draw_session(const session_data session, int x, int y, int w) {
         ch = u_word[j];
         color = u_word[j] == word[j] ? CORRECT : INCORRECT;
 
-        if (u_word[j] == '\0') {
+        if (u_word[j] == L'\0') {
           ch = word[j];
           color = MISSED; // early spaced
         }
       }
 
-      if (j > len)
-        color = EXTRA;
+      if (j >= len)
+        color = EXTRA; // More chars than expected
 
-      if (i == session.u_word && j == session.u_idx)
-        color = CURSOR;
+      // Check if current char is under cursor
+      if (i == session.u_word) {
+        int word_cursor = j == session.u_idx;
+        int end_cursor = j == len && session.u_idx > len && j >= session.u_idx;
 
-      attron(COLOR_PAIR(color));
-      mvprintw(x + oy, y + ox + j, "%lc", ch);
-      attroff(COLOR_PAIR(color));
+        if (word_cursor ^ end_cursor)
+          color = CURSOR;
+
+        if (ch == L'\0')
+          ch = ' ';
+      }
+
+      c_mvprintw(color, y + oy, x + ox + j, "%lc", ch);
     }
 
     ox += max_len + 1;
@@ -194,50 +262,34 @@ int draw_session(const session_data session, int x, int y, int w) {
   return oy;
 }
 
-#define __colored(color, macro)                                                \
-  attron(COLOR_PAIR(color));                                                   \
-  macro;                                                                       \
-  attroff(COLOR_PAIR(color));
-
-#define cmvprintw(color, y, x, pattern, ...)                                   \
-  __colored(color, mvprintw(y, x, pattern, __VA_ARGS__));
-
-#define cprintw(color, pattern, ...)                                           \
-  __colored(color, printw(pattern, __VA_ARGS__));
-
-#define mvrel(x, y, dx, dy)                                                    \
-  getyx(stdscr, y, x);                                                         \
-  move(y + dy, x + dx);
-
 void draw_stats(stats stats, int x, int y) {
   double wpm = get_wpm_stat(stats);
   double accuracy = get_accuracy_stat(stats);
 
-  attron(A_REVERSE);
-  cmvprintw(HEADER, y, x, "WPM: %.1f ACC: %.1f%% %.1fs ", wpm, accuracy,
-            stats.time);
-  cprintw(CORRECT, " %.3d ", stats.correct);
-  mvrel(x, y, 1, 0);
-  cprintw(INCORRECT, " %.3d ", stats.incorrect);
-  mvrel(x, y, 1, 0);
-  cprintw(MISSED, " %.3d ", stats.missed);
-  mvrel(x, y, 1, 0);
-  cprintw(EXTRA, " %.3d ", stats.extra);
-  attroff(A_REVERSE);
+  reverse({
+    c_mvprintw(HEADER, y, x, "WPM: %.1f ACC: %.1f%% %.1fs ", wpm, accuracy,
+               stats.time);
+    c_printw(CORRECT, " %.3d ", stats.correct);
+    more_relative(x, y, 1, 0);
+    c_printw(INCORRECT, " %.3d ", stats.incorrect);
+    more_relative(x, y, 1, 0);
+    c_printw(MISSED, " %.3d ", stats.missed);
+    more_relative(x, y, 1, 0);
+    c_printw(EXTRA, " %.3d ", stats.extra);
+  })
 }
 
-stats run_session(char *dataset_path, int seed, int word_count,
-                  int target_fps) {
+stats run_session(options opt) {
   session_data session;
-  session.word_count = word_count;
-  session.wordset = malloc(sizeof(wchar_t *) * word_count);
-  session.u_wordset = malloc(sizeof(wchar_t *) * word_count);
+  session.word_count = opt.word_count;
+  session.wordset = malloc(sizeof(wchar_t *) * opt.word_count);
+  session.u_wordset = malloc(sizeof(wchar_t *) * opt.word_count);
   session.u_word = 0;
   session.u_idx = 0;
 
-  srand(seed);
-  int dataset_length = load_dataset(dataset_path);
-  for (int i = 0; i < word_count; i++) {
+  srand(opt.seed);
+  int dataset_length = load_dataset(opt.dataset_path);
+  for (int i = 0; i < opt.word_count; i++) {
     session.wordset[i] = DATASET[rand() % dataset_length];
     session.u_wordset[i] = calloc(MAX_WORD_LENGTH, sizeof(wchar_t));
   }
@@ -254,63 +306,69 @@ stats run_session(char *dataset_path, int seed, int word_count,
   timespec start, end;
   clock_gettime(CLOCK_MONOTONIC, &start);
 
-  wchar_t /*old*/ input, last_input;
+  // napms(1000/fps)
+  double frame_delay = 1000. / opt.target_fps;
 
   int running = 1;
   int paused = 1;
   int debug = 0;
   while (running) {
-    if (get_wch(&input) != ERR) {
-      int just_press = input != last_input;
-      wchar_t *target_word = session.wordset[session.u_word];
+    const wchar_t input;
 
-      if (input == KEY_1 && just_press)
+    if (get_wch(&input) != ERR) {
+      wchar_t *target_word = session.wordset[session.u_word];
+      wchar_t *u_word = session.u_wordset[session.u_word];
+      int target_len = wcslen(target_word);
+
+      if (input == KEY_1)
         running = 0;
-      if (input == KEY_2 && just_press)
+      else if (input == KEY_2)
         debug = !debug;
-      else if (input == KEY_ESC && just_press) {
+      else if (input == KEY_ESC)
         paused = 1;
-      } else {
+      else {
         if (paused) {
           paused = 0;
           clock_gettime(CLOCK_MONOTONIC, &start); // reset timer
         }
 
-        if (input == KEY_SPACE && just_press) {
-          int len_diff = session.u_idx - wcslen(target_word);
-
-          if (len_diff >= 0)
-            stats.extra += len_diff;
-          else
+        if (input == KEY_SPACE) {
+          // Count extra/missed chars
+          int len_diff = session.u_idx - target_len;
+          if (len_diff < 0)
             stats.missed -= len_diff;
+          else {
+            stats.extra += len_diff;
+          }
 
-          session.u_word++;
-          session.u_idx = 0;
-        } else if (input == KEY_BACKSPACE || input == 127 || input == 8) {
+          // Move to next word
+          if (session.u_idx > 0 && session.u_word < opt.word_count - 1) {
+            session.u_word++;
+            session.u_idx = 0;
+          }
+
+        } else if (IS_BACKSPACE(input)) {
           if (session.u_idx >= 0) {
-            session.u_wordset[session.u_word][session.u_idx] = '\0';
+            u_word[session.u_idx] = '\0';
             session.u_idx = MAX(0, session.u_idx - 1);
           }
-        } else {
-          if (session.u_idx >= wcslen(target_word)) {
+        } else if (session.u_idx < MAX_WORD_LENGTH - 1) { // Prevent overflow
+          u_word[session.u_idx] = input;
+          u_word[++session.u_idx] = L'\0';
+
+          if (target_word[session.u_idx] == input)
+            stats.correct++;
+          else
             stats.incorrect++;
-          } else {
-            if (target_word[session.u_idx] == input)
-              stats.correct++;
-            else
-              stats.incorrect++;
-          }
 
-          if (session.u_idx < MAX_WORD_LENGTH) {
-            session.u_wordset[session.u_word][session.u_idx] = input;
-            session.u_idx++;
-          }
+          // Check if session was finished
+          int is_last = session.u_word == opt.word_count - 1;
+          int done = session.u_idx >= target_len;
+          int finish = (is_last && done);
+
+          if (finish)
+            running = 0;
         }
-
-        int is_session_complete = session.u_word == word_count - 1 &&
-                                  session.u_idx == wcslen(target_word);
-        if (session.u_word >= word_count || is_session_complete)
-          running = 0;
       }
     }
 
@@ -320,7 +378,7 @@ stats run_session(char *dataset_path, int seed, int word_count,
     getmaxyx(stdscr, h, w);
 
     draw_header(0, 0, w, paused);
-    int rows = draw_session(session, 2, 1, w - 2);
+    int rows = draw_session(session, 1, 2, w - 2);
     draw_stats(stats, 1, h - 1);
 
     // Timer
@@ -332,18 +390,20 @@ stats run_session(char *dataset_path, int seed, int word_count,
       mvprintw(h - 3, 2, "%.2f FPS", 1 / dt);
 
     if (paused) {
-      int y = MIN(rows + 4, h - 3);
-      draw_center_text(0, y, w, L" Paused, click any key to return ");
+      colored(HEADER, {
+        int y = MIN(rows + 4, h - 3);
+        draw_center_text(0, y, w, L" Paused, click any key to return ");
+      })
     } else {
       stats.time += dt;
     }
 
     refresh();
 
-    napms(1000. / target_fps);
+    napms(frame_delay);
   }
 
-  for (int i = 0; i < word_count; i++)
+  for (int i = 0; i < opt.word_count; i++)
     free(session.u_wordset[i]);
 
   free(session.u_wordset);
@@ -354,15 +414,15 @@ stats run_session(char *dataset_path, int seed, int word_count,
   return stats;
 }
 
-void finish() {}
+int main(int argc, char **argv) {
+  options opt = get_cmdline_options(argc, argv);
 
-int main() {
-  int seed = time(NULL);
-  stats stats = run_session("./words.txt", seed, 10, 60);
+  stats stats = run_session(opt);
   double wpm = get_wpm_stat(stats);
   double accuracy = get_accuracy_stat(stats);
 
-  printf("Results:\n");
+  printf("Monkeype v1.0\n");
+  printf("  Seed: %d\n", opt.seed);
   printf("  WPM: %.1f\n", wpm);
   printf("  Accuracy: %.1f%%\n", accuracy);
   printf("  Time: %.1fs\n", stats.time);

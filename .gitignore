@@ -1,3 +1,5 @@
 datasets/
 monkype
 words.txt
+nodemon.json
+build.sh

@@ -21,8 +21,6 @@ with open("./words.txt", "w") as words:
             words.write(word + "\n")
             max_len = max(max_len, len(word))
 
-        print("Max word length: %d" % (max_len))
-
-        print("Replace these macros at the top of main.c:\n")
-        print("#define MAX_WORDS %d" % (len(data["words"])))
-        print("#define MAX_WORD_LENGTH %d" % (max_len))
+        print("\n[!] Replace these macros at the top of main.c:")
+        print("\t#define MAX_WORDS %d" % (len(data["words"])))
+        print("\t#define MAX_WORD_LENGTH %d" % (max_len))
