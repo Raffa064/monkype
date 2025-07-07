@@ -1,0 +1,7 @@
+- End ncurses window at kill signal
+- Export CSV
+- Different modes?
+  - Endless
+  - Word-limited
+  - Timed
+-  Themes

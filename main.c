@@ -84,7 +84,7 @@ typedef struct {
   int word_count;
   int target_fps;
   char *dataset_path;
-  char *export_path;
+  char *export_csv;
   int print_only;
 } options;
 
@@ -173,7 +173,7 @@ void draw_header(int x, int y, int w, int paused) {
   wchar_t *title = L"MONKYPE v1.0";
 
   colored(color, {
-    for (int i = 0; i < w - 1; i++)
+    for (int i = 0; i < w; i++)
       mvaddch(y, x + i, L' ');
 
     draw_center_text(x, y, w, title);
@@ -271,9 +271,11 @@ void draw_stats(stats stats, int x, int y, int w) {
   double wpm = get_wpm_stat(stats);
   double accuracy = get_accuracy_stat(stats);
 
+  c_mvprintw(HEADER, y, x, " %s ", "WORDED");
+
   reverse({
-    c_mvprintw(HEADER, y, x, "WPM: %.1f ACC: %.1f%% %.1fs ", wpm, accuracy,
-               stats.time);
+    c_printw(HEADER, " WPM: %.1f ACC: %.1f%% %.1fs ", wpm, accuracy,
+             stats.time);
 
     int n = 3; // spacing
     int len = MAX(3, lg10((double)stats.correct)) +
@@ -451,7 +453,7 @@ options get_cmdline_options(int argc, char **argv) {
   opt.word_count = 10;
   opt.target_fps = 60;
   opt.dataset_path = "./words.txt";
-  opt.export_path = NULL;
+  opt.export_csv = NULL;
   opt.print_only = 0;
 
   for (int i = 1; i < argc; i++) {
@@ -465,24 +467,24 @@ options get_cmdline_options(int argc, char **argv) {
       opt.target_fps = strtol(argv[++i], NULL, 10);
     else if (strcmp(cmd, "-d") == 0)
       opt.dataset_path = argv[++i];
-    else if (strcmp(cmd, "-e") == 0)
-      opt.export_path = argv[++i];
-    else if (strcmp(cmd, "-p") == 0) {
+    else if (strcmp(cmd, "--csv") == 0)
+      opt.export_csv = argv[++i];
+    else if (strcmp(cmd, "-p") == 0)
       opt.print_only = 1;
-    } else {
+    else {
       if (strcmp(cmd, "-h") != 0)
         printf("Invalid option: '%s'", cmd);
 
       printf("Monkype v1.0\n\n"
              "usage monkype [ -h] [ -s <seed>] [ -w <word_count> ] [ -f <fps>] "
-             "[ -d <dataset_path> ] [ -e <export_path> ] [ -p ]\n"
+             "[ -d <dataset_path> ] [ --csv <file> ] [ -p ]\n"
              "\n"
              "\t -h  Show this information dialog\n"
              "\t -s  Set the random generator seed\n"
              "\t -w  Amount of words\n"
              "\t -f  Set target fps\n"
              "\t -d  Location for the dataset df: ./words.txt\n"
-             "\t -e  Location to export stats (as csv)\n"
+             "\t --csv print stats as csv\n"
              "\t -p  Print words only\n");
 
       exit(0);
@@ -500,17 +502,27 @@ void print_words(options opt) {
 
   wprintf(L"\n");
 }
-int main(int argc, char **argv) {
-  options opt = get_cmdline_options(argc, argv);
 
-  if (opt.print_only) {
-    print_words(opt);
-    return 0;
-  }
-
-  stats stats = run_session(opt);
+void print_results(options opt, stats stats) {
   double wpm = get_wpm_stat(stats);
   double accuracy = get_accuracy_stat(stats);
+
+  if (opt.export_csv) {
+    FILE *file = fopen(opt.export_csv, "a");
+
+    if (ftell(file) == 0) {
+      printf("Wrinting CSV header into '%s'...\n", opt.export_csv);
+      fprintf(file, "timestamp,seed,word_count,wpm,accuracy,time,correct,"
+                    "incorrect,missed,extra\n");
+    }
+
+    fprintf(file, "%ld,%d,%d,%f,%f,%f,%d,%d,%d,%d\n", time(NULL), opt.seed,
+            opt.word_count, wpm, accuracy, stats.time, stats.correct,
+            stats.incorrect, stats.missed, stats.extra);
+
+    if (file == stdout)
+      fclose(file);
+  }
 
   printf("Monkeype v1.0\n");
   printf("  Seed: %d\n", opt.seed);
@@ -520,4 +532,16 @@ int main(int argc, char **argv) {
   printf("  Time: %.1fs\n", stats.time);
   printf("  C/I/M/E: %d/%d/%d/%d\n", stats.correct, stats.incorrect,
          stats.missed, stats.extra);
+}
+
+int main(int argc, char **argv) {
+  options opt = get_cmdline_options(argc, argv);
+
+  if (opt.print_only) {
+    print_words(opt);
+    return 0;
+  }
+
+  stats stats = run_session(opt);
+  print_results(opt, stats);
 }
