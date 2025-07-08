@@ -4,3 +4,4 @@ words.txt
 nodemon.json
 build.sh
 stats.csv
+.clangd

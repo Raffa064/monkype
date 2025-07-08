@@ -1,13 +1,12 @@
-#define NCURSES_WIDECHAR 1
-#define _POSIX_C_SOURCE 200809L
-
 #include <locale.h>
 #include <ncursesw/ncurses.h>
+#include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
 #include <wchar.h>
+#include <wctype.h>
 
 #define MAX_WORDS 1000000
 #define MAX_WORD_LENGTH 40
@@ -77,10 +76,13 @@ typedef struct {
   int missed;
   int extra;
   double time;
+  int forced_quit;
 } stats;
 
 typedef struct {
+  int loop;
   int seed;
+  int custom_seed;
   int word_count;
   int target_fps;
   char *dataset_path;
@@ -112,6 +114,8 @@ double difftime_sec(timespec start, timespec end) {
   return (double)sec + (double)nsec / 1e9;
 }
 
+void close_ncurses() { endwin(); }
+
 void setup_ncurses() {
   initscr();
   noecho();
@@ -131,6 +135,9 @@ void setup_ncurses() {
   init_pair(MISSED, COLOR_MAGENTA, COLOR_BLACK);
   init_pair(EXTRA, COLOR_YELLOW, COLOR_BLACK);
   init_pair(CURSOR, COLOR_BLACK, COLOR_WHITE);
+
+  signal(SIGINT, close_ncurses);
+  signal(SIGTERM, close_ncurses);
 }
 
 int load_dataset(char *path) {
@@ -318,6 +325,7 @@ stats run_session(options opt) {
   stats.missed = 0;
   stats.extra = 0;
   stats.time = 0;
+  stats.forced_quit = 0;
 
   timespec start, end;
   clock_gettime(CLOCK_MONOTONIC, &start);
@@ -331,7 +339,7 @@ stats run_session(options opt) {
   int show_fps = 0;
   int scroll_y = 0;
   while (running) {
-    const wchar_t key;
+    wint_t key;
     int ktype = get_wch(&key);
     int is_special_key = ktype == KEY_CODE_YES || key == L'\n';
 
@@ -343,9 +351,10 @@ stats run_session(options opt) {
 
       if (key == KEY_ESC)
         paused = 1;
-      else if (key == KEY_1)
+      else if (key == KEY_1) {
         running = 0;
-      else if (key == KEY_2)
+        stats.forced_quit = 1;
+      } else if (key == KEY_2)
         show_word = !show_word;
       else if (key == KEY_3)
         show_fps = !show_fps;
@@ -442,14 +451,15 @@ stats run_session(options opt) {
   free(session.u_wordset);
   free(session.wordset);
 
-  endwin();
+  close_ncurses();
 
   return stats;
 }
 
 options get_cmdline_options(int argc, char **argv) {
   options opt;
-  opt.seed = time(NULL);
+  opt.seed = 0;
+  opt.custom_seed = 0;
   opt.word_count = 10;
   opt.target_fps = 60;
   opt.dataset_path = "./words.txt";
@@ -459,9 +469,12 @@ options get_cmdline_options(int argc, char **argv) {
   for (int i = 1; i < argc; i++) {
     char *cmd = argv[i];
 
-    if (strcmp(cmd, "-s") == 0)
+    if (strcmp(cmd, "-l") == 0)
+      opt.loop = 1;
+    else if (strcmp(cmd, "-s") == 0) {
       opt.seed = strtol(argv[++i], NULL, 10);
-    else if (strcmp(cmd, "-w") == 0)
+      opt.custom_seed = 1;
+    } else if (strcmp(cmd, "-w") == 0)
       opt.word_count = strtol(argv[++i], NULL, 10);
     else if (strcmp(cmd, "-f") == 0)
       opt.target_fps = strtol(argv[++i], NULL, 10);
@@ -475,17 +488,20 @@ options get_cmdline_options(int argc, char **argv) {
       if (strcmp(cmd, "-h") != 0)
         printf("Invalid option: '%s'", cmd);
 
-      printf("Monkype v1.0\n\n"
-             "usage monkype [ -h] [ -s <seed>] [ -w <word_count> ] [ -f <fps>] "
-             "[ -d <dataset_path> ] [ --csv <file> ] [ -p ]\n"
+      printf("Monkype v1.0\n"
              "\n"
-             "\t -h  Show this information dialog\n"
-             "\t -s  Set the random generator seed\n"
-             "\t -w  Amount of words\n"
-             "\t -f  Set target fps\n"
-             "\t -d  Location for the dataset df: ./words.txt\n"
-             "\t --csv print stats as csv\n"
-             "\t -p  Print words only\n");
+             "Usage:\n"
+             "  monkype [options]\n"
+             "\n"
+             "Options:\n"
+             "  -h              Show this help message and exit\n"
+             "  -l              Loop mode (restart after finish)\n"
+             "  -s <seed>       Set RNG seed\n"
+             "  -w <count>      Number of words in session\n"
+             "  -f <fps>        Target frames per second\n"
+             "  -d <file>       Dataset path (default: ./words.txt)\n"
+             "  --csv <file>    Export session stats to a CSV file\n"
+             "  -p              Print session word list only\n");
 
       exit(0);
     }
@@ -504,6 +520,11 @@ void print_words(options opt) {
 }
 
 void print_results(options opt, stats stats) {
+  if (stats.forced_quit) {
+    printf("Force quit\n");
+    return;
+  }
+
   double wpm = get_wpm_stat(stats);
   double accuracy = get_accuracy_stat(stats);
 
@@ -537,11 +558,19 @@ void print_results(options opt, stats stats) {
 int main(int argc, char **argv) {
   options opt = get_cmdline_options(argc, argv);
 
-  if (opt.print_only) {
-    print_words(opt);
-    return 0;
-  }
+  while (1) {
+    if (!opt.custom_seed)
+      opt.seed = time(NULL);
 
-  stats stats = run_session(opt);
-  print_results(opt, stats);
+    if (opt.print_only) {
+      print_words(opt);
+      return 0;
+    }
+
+    stats stats = run_session(opt);
+    print_results(opt, stats);
+
+    if (!opt.loop || stats.forced_quit)
+      break;
+  }
 }
