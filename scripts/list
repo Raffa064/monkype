@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
 
+# This script is exported as monkype-list, and is used to list datasets from Monkey Type's github
+
 import requests
 import sys
 import os
@@ -43,10 +45,21 @@ else:
     update_cache()
 
 
-print("Downloadable datasets:")
+if len(sys.argv) < 2:
+    print("usage monkype-list <query>\n")
+    print(
+        "Displays a list of all downloadable datasets from original"
+        + " \033[34mMonkey Type's github\033[0m that matches with the query string\n"
+    )
+    print(
+        "\033[32mExample:\033[0m Use \033[34mmonkype-list english\033[0m to show all datasets for english."
+    )
+    exit(1)
 
 data = load_cache()
-filter = sys.argv[1] if len(sys.argv) >= 2 else ""
+filter = sys.argv[1]
+
+print("Downloadable datasets:")
 for name in data:
     if filter in name:
         print("  * " + name)

@@ -7,6 +7,7 @@ import json
 
 if len(sys.argv) < 3:
     print("You need to specify the input and output paths!")
+    print("NOTE: This is a internal script, used by monkype-get to convert datasets.")
     exit()
 
 input = sys.argv[1]
@@ -16,11 +17,12 @@ with open(output, "w") as words:
     with open(input, "r") as jsonFile:
         data = json.load(jsonFile)
 
-        print("Converting '%s' dataset..." % (data["name"]))
+        print("  \033[32m*\033[0m Converting '%s' dataset..." % (data["name"]))
 
         max_len = 0
         for word in data["words"]:
             words.write(word + "\n")
             max_len = max(max_len, len(word))
 
-        print("Word count: %d\nMax word length: %d" % (len(data["words"]), max_len))
+        print("    - Word count: %d" % (len(data["words"])))
+        print("    - Max word length: %d" % (max_len))

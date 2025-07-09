@@ -3,11 +3,24 @@
 MONKYPE_DIR="$HOME/.local/share/monkype"
 DATASETS_DIR="$MONKYPE_DIR/datasets"
 
-rm $DATASETS_DIR/${1}.txt >/dev/null 2>&1
-status=$?
+if [ -z "$1" ]; then
+  echo "usage monkype-remove <dataset> | all"
+  echo
+  echo "Can be used to remove a specific monkype dataset, or \e[31mall\e[0m datasets."
+  exit 0
+fi
 
-if [ $status -eq 0 ]; then
-  echo "Dataset '$1' removed"
+if [ "$1" == "all" ]; then
+  for i in $(ls $DATASETS_DIR); do
+    monkype-remove ${i:0:-4}
+  done
 else
-  echo "Not found"
+  rm $DATASETS_DIR/${1}.txt >/dev/null 2>&1
+  status=$?
+
+  if [ $status -eq 0 ]; then
+    echo -e "\e[32m[*]\e[0m Dataset \e[32m$1\e[0m removed"
+  else
+    echo -e "\e[33m[!]\e[0m Dataset not found \e[33m$1\e[0m"
+  fi
 fi

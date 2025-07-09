@@ -9,18 +9,20 @@ dataset_name="$1"
 if [ -z "$dataset_name" ]; then
   echo "usage monkype-get <dataset>"
   echo
+  echo -e "Install and use datasets from original \e[34mMonkey Type's github\e[0m"
+  echo
 
   if [ -n "$(ls $DATASETS_DIR)" ]; then
     echo "Installed datasets:"
     for i in $(ls $DATASETS_DIR); do
-      echo "  * ${i:0:-4}"
+      echo -e "  \e[32m*\e[0m ${i:0:-4}"
     done
   else
-    echo "No available datates"
+    echo "No installed datasets"
   fi
 
   echo
-  echo "NOTE: Use 'monkype-list <query>' to list downloadable datasets"
+  echo -e "NOTE: Use \e[34m'monkype-list <query>'\e[0m to list downloadable datasets"
 
   exit 1
 fi
@@ -52,7 +54,7 @@ cp "$dataset_file" "$MONKYPE_DIR/words.txt" >/dev/null 2>&1
 status=$?
 
 if [ $status -eq 0 ]; then
-  echo "Using dataset '$dataset_name'"
+  echo -e "Using dataset \e[34m$dataset_name\e[0m"
 else
   echo "Couldn't get dataset."
   exit 1

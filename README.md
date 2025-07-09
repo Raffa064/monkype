@@ -1,6 +1,6 @@
 # Monkype
 
-A terminal-based clone of [Monkeytype](https://github.com/monkeytypegame/monkeytype/), built entirely in C using `ncurses`. It features a clean TUI with real-time feedback, WPM and accuracy stats, customizable wordsets, and responsive input handling. Designed for performance, portability, and minimalism, it aims to bring the Monkeytype experience to the command line.
+A terminal-based clone of [Monkeytype](https://github.com/monkeytypegame/monkeytype/), built in C using `ncurses`. It features a clean TUI with real-time feedback, WPM and accuracy stats, customizable wordsets, and responsive input handling. Designed for performance, portability, and minimalism, it aims to bring the Monkeytype experience to the command line.
 
 <p align="center"> <img alt="Printscreen" src="./assets/print.png"> </p>
 
