@@ -1,0 +1,52 @@
+#!/usr/bin/env python3
+
+import requests
+import sys
+import os
+from time import time
+
+HOME_PATH = str(os.environ.get("HOME"))
+CACHE_PATH = HOME_PATH + "/.local/share/monkype/list-cache"
+
+MAX_CACHE_AGE = 12  # in hours
+
+
+def load_cache():
+    data = []
+    with open(CACHE_PATH, "r") as cache:
+        data = [line[0:-1] for line in cache.readlines()]
+
+    return data
+
+
+def update_cache():
+    CONTENT_URL = "https://api.github.com/repos/monkeytypegame/monkeytype/contents/frontend/static/languages"
+
+    with open(CACHE_PATH, "w") as cache:
+        print("Updating list cache...")
+        res = requests.get(CONTENT_URL)
+        json = res.json()
+
+        for lang in json:
+            if lang["type"] == "file" and lang["name"][-5:] == ".json":
+                name = lang["name"][0:-5]  # cut ".json" from file name
+                cache.write(name + "\n")
+
+
+if os.path.exists(CACHE_PATH):
+    last_mod = os.path.getmtime(CACHE_PATH)
+    hours = (time() - last_mod) / 3600
+
+    if hours > MAX_CACHE_AGE:
+        update_cache()
+else:
+    update_cache()
+
+
+print("Downloadable datasets:")
+
+data = load_cache()
+filter = sys.argv[1] if len(sys.argv) >= 2 else ""
+for name in data:
+    if filter in name:
+        print("  * " + name)

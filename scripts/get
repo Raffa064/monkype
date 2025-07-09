@@ -11,7 +11,7 @@ if [ -z "$dataset_name" ]; then
   echo
 
   if [ -n "$(ls $DATASETS_DIR)" ]; then
-    echo "Available datasets:"
+    echo "Installed datasets:"
     for i in $(ls $DATASETS_DIR); do
       echo "  * ${i:0:-4}"
     done
@@ -20,8 +20,7 @@ if [ -z "$dataset_name" ]; then
   fi
 
   echo
-  echo NOTE: Datset files are available at:
-  echo   https://github.com/monkeytypegame/monkeytype/blob/master/frontend/static/languages/
+  echo "NOTE: Use 'monkype-list <query>' to list downloadable datasets"
 
   exit 1
 fi
