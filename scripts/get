@@ -9,13 +9,20 @@ dataset_name="$1"
 if [ -z "$dataset_name" ]; then
   echo "usage monkype-get <dataset>"
   echo
-  echo -e "Install and use datasets from original \e[34mMonkey Type's github\e[0m"
+  echo -e "Install and \e[1;37mUSE\e[0m datasets from original \e[34mMonkey Type's github\e[0m"
   echo
 
   if [ -n "$(ls $DATASETS_DIR)" ]; then
+    current="$(cat $MONKYPE_DIR/.dataset)"
     echo "Installed datasets:"
     for i in $(ls $DATASETS_DIR); do
-      echo -e "  \e[32m*\e[0m ${i:0:-4}"
+      name="${i:0:-4}"
+
+      if [ "$name" == "$current" ]; then
+        name+=" \e[34m(current)\e[0m"
+      fi
+
+      echo -e "  \e[32m*\e[0m $name"
     done
   else
     echo "No installed datasets"

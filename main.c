@@ -617,13 +617,18 @@ void print_results(options opt, stats stats) {
 
     if (ftell(file) == 0) {
       printf("Wrinting CSV header into '%s'...\n", opt.output_csv_path);
-      fprintf(file, "timestamp,seed,word_count,wpm,accuracy,time,correct,"
-                    "incorrect,missed,extra\n");
+      fprintf(file,
+              "timestamp,dataset,seed,word_count,wpm,accuracy,time,correct,"
+              "incorrect,missed,extra\n");
     }
 
-    fprintf(file, "%ld,%d,%d,%f,%f,%f,%d,%d,%d,%d\n", time(NULL), opt.seed,
-            opt.word_count, wpm, accuracy, stats.time, stats.correct,
-            stats.incorrect, stats.missed, stats.extra);
+    char *dataset_name = opt.dataset_name;
+    if (opt.custom_dataset_path)
+      dataset_name = "custom";
+
+    fprintf(file, "%ld,%s,%d,%d,%f,%f,%f,%d,%d,%d,%d\n", time(NULL),
+            dataset_name, opt.seed, opt.word_count, wpm, accuracy, stats.time,
+            stats.correct, stats.incorrect, stats.missed, stats.extra);
 
     if (file == stdout)
       fclose(file);
