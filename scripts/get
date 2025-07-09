@@ -54,6 +54,7 @@ cp "$dataset_file" "$MONKYPE_DIR/words.txt" >/dev/null 2>&1
 status=$?
 
 if [ $status -eq 0 ]; then
+  echo "$dataset_name" > "$MONKYPE_DIR/.dataset"
   echo -e "Using dataset \e[34m$dataset_name\e[0m"
 else
   echo "Couldn't get dataset."

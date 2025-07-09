@@ -94,10 +94,32 @@ typedef struct {
   bool custom_seed;
   int word_count;
   int target_fps;
-  char *dataset_path;
+  char dataset_name[256];
+  char *custom_dataset_path;
   char *output_csv_path;
   bool print_only;
 } options;
+
+// This function returns the ~/local/share/monkype directory
+// WARN: It also ensures that the directory exists
+// WARN: It's heap allocated
+char *get_data_dir() {
+  char *home = getenv("HOME");
+
+  if (!home) {
+    perror("Couldn't get $HOME");
+    exit(1);
+  }
+
+  char *path = malloc(MAX_PATH_LENGTH);
+  strcat(strcpy(path, home), "/.local/share/monkype");
+
+  if (access(path, F_OK) != 0) {
+    mkdir(path, DATA_DIR_PERMISSIONS);
+  }
+
+  return path;
+}
 
 double get_wpm_stat(stats stats) {
   if (stats.time == 0)
@@ -149,7 +171,19 @@ void setup_ncurses() {
   signal(SIGTERM, close_ncurses);
 }
 
-int load_dataset(char *path) {
+int load_dataset(options opt) {
+  char *path = opt.custom_dataset_path;
+
+  bool path_should_be_freed = false;
+  if (!opt.custom_dataset_path) {
+    path = get_data_dir();
+    strcat(path, "/datasets/");
+    strcat(path, opt.dataset_name);
+    strcat(path, ".txt");
+
+    path_should_be_freed = true;
+  }
+
   FILE *file = fopen(path, "r");
 
   if (!file) {
@@ -173,6 +207,11 @@ int load_dataset(char *path) {
       break;
     }
   }
+
+  fclose(file);
+
+  if (path_should_be_freed)
+    free(path);
 
   return i;
 }
@@ -330,7 +369,7 @@ stats run_session(options opt) {
   session.u_idx = 0;
 
   srand(opt.seed);
-  int dataset_length = load_dataset(opt.dataset_path);
+  int dataset_length = load_dataset(opt);
   for (int i = 0; i < opt.word_count; i++) {
     session.wordset[i] = DATASET[rand() % dataset_length];
     session.u_wordset[i] = calloc(MAX_WORD_LENGTH, sizeof(wchar_t));
@@ -479,27 +518,6 @@ stats run_session(options opt) {
   return stats;
 }
 
-// This function returns the ~/local/share/monkype directory
-// WARN: It also ensures that the directory exists
-// WARN: It's heap allocated
-char *get_data_dir() {
-  char *home = getenv("HOME");
-
-  if (!home) {
-    perror("Couldn't get $HOME");
-    exit(1);
-  }
-
-  char *path = malloc(MAX_PATH_LENGTH);
-  strcat(strcpy(path, home), "/.local/share/monkype");
-
-  if (access(path, F_OK) != 0) {
-    mkdir(path, DATA_DIR_PERMISSIONS);
-  }
-
-  return path;
-}
-
 options get_cmdline_options(int argc, char **argv) {
   options opt;
   opt.loop = false;
@@ -507,9 +525,25 @@ options get_cmdline_options(int argc, char **argv) {
   opt.custom_seed = false;
   opt.word_count = 10;
   opt.target_fps = 60;
-  opt.dataset_path = strcat(get_data_dir(), "/words.txt");
+  opt.custom_dataset_path = NULL;
   opt.output_csv_path = strcat(get_data_dir(), "/stats.txt");
   opt.print_only = false;
+
+  char *dot_file_path = strcat(get_data_dir(), "/.dataset");
+  char dataset_name[256] = {0};
+  if (access(dot_file_path, F_OK) == 0) {
+    FILE *dot_file = fopen(dot_file_path, "r");
+
+    fread(dataset_name, 1, sizeof(dataset_name), dot_file);
+    dataset_name[strcspn(dataset_name, "\n")] = NULL_BYTE; // remove line breaks
+    strcpy(opt.dataset_name, dataset_name);
+
+    fclose(dot_file);
+  } else {
+    strcpy(dataset_name, "<None>");
+  }
+
+  free(dot_file_path);
 
   for (int i = 1; i < argc; i++) {
     char *cmd = argv[i];
@@ -524,7 +558,9 @@ options get_cmdline_options(int argc, char **argv) {
     else if (strcmp(cmd, "-f") == 0)
       opt.target_fps = strtol(argv[++i], NULL, 10);
     else if (strcmp(cmd, "-d") == 0)
-      strcpy(opt.dataset_path, argv[++i]);
+      strcpy(opt.custom_dataset_path, argv[++i]);
+    else if (strcmp(cmd, "-D") == 0)
+      strcpy(opt.dataset_name, argv[++i]);
     else if (strcmp(cmd, "--csv") == 0)
       strcpy(opt.output_csv_path, argv[++i]);
     else if (strcmp(cmd, "-p") == 0)
@@ -544,11 +580,12 @@ options get_cmdline_options(int argc, char **argv) {
              "  -s <seed>       Set RNG seed\n"
              "  -w <count>      Number of words in session\n"
              "  -f <fps>        Target frames per second\n"
-             "  -d <file>       Dataset path (default: "
-             "~/.local/share/monkype/words.txt)\n"
+             "  -d <file>       Use custom dataset from path\n"
+             "  -D <dataset>    Use installed dataset (default: %s)\n"
              "  --csv <file>    Export session stats to a CSV file (default: "
              "~/.local/share/monkype/stats.csv)\n"
-             "  -p              Print session word list only\n");
+             "  -p              Print session word list only\n",
+             dataset_name);
 
       exit(0);
     }
@@ -559,7 +596,7 @@ options get_cmdline_options(int argc, char **argv) {
 
 void print_words(options opt) {
   srand(opt.seed);
-  int dataset_length = load_dataset(opt.dataset_path);
+  int dataset_length = load_dataset(opt);
   for (int i = 0; i < opt.word_count; i++)
     wprintf(L"%ls ", DATASET[rand() % dataset_length]);
 
@@ -621,6 +658,8 @@ int main(int argc, char **argv) {
       break;
   }
 
-  free(opt.dataset_path);
+  if (opt.custom_dataset_path)
+    free(opt.custom_dataset_path);
+
   free(opt.output_csv_path);
 }
