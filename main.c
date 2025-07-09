@@ -558,7 +558,7 @@ options get_cmdline_options(int argc, char **argv) {
     else if (strcmp(cmd, "-f") == 0)
       opt.target_fps = strtol(argv[++i], NULL, 10);
     else if (strcmp(cmd, "-d") == 0)
-      strcpy(opt.custom_dataset_path, argv[++i]);
+      opt.custom_dataset_path = argv[++i];
     else if (strcmp(cmd, "-D") == 0)
       strcpy(opt.dataset_name, argv[++i]);
     else if (strcmp(cmd, "--csv") == 0)
@@ -657,9 +657,6 @@ int main(int argc, char **argv) {
     if (!opt.loop || stats.forced_quit)
       break;
   }
-
-  if (opt.custom_dataset_path)
-    free(opt.custom_dataset_path);
 
   free(opt.output_csv_path);
 }
