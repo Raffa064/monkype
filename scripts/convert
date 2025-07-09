@@ -5,12 +5,14 @@
 import sys
 import json
 
-with open("./words.txt", "w") as words:
-    if len(sys.argv) < 2:
-        print("You need to specify path to a input file!")
-        exit()
+if len(sys.argv) < 3:
+    print("You need to specify the input and output paths!")
+    exit()
 
-    input = sys.argv[1]
+input = sys.argv[1]
+output = sys.argv[2]
+
+with open(output, "w") as words:
     with open(input, "r") as jsonFile:
         data = json.load(jsonFile)
 
@@ -21,6 +23,4 @@ with open("./words.txt", "w") as words:
             words.write(word + "\n")
             max_len = max(max_len, len(word))
 
-        print("\n[!] Replace these macros at the top of main.c:")
-        print("\t#define MAX_WORDS %d" % (len(data["words"])))
-        print("\t#define MAX_WORD_LENGTH %d" % (max_len))
+        print("Word count: %d\nMax word length: %d" % (len(data["words"]), max_len))

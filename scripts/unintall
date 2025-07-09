@@ -1,0 +1,9 @@
+#!/bin/bash
+
+set -e
+
+echo "Uninstalling scripts..."
+rm /usr/local/bin/monkype-*
+
+echo "Uninstalling executable..."
+rm /usr/local/bin/monkype

@@ -1,0 +1,13 @@
+#!/bin/bash
+
+MONKYPE_DIR="$HOME/.local/share/monkype"
+DATASETS_DIR="$MONKYPE_DIR/datasets"
+
+rm $DATASETS_DIR/${1}.txt >/dev/null 2>&1
+status=$?
+
+if [ $status -eq 0 ]; then
+  echo "Dataset '$1' removed"
+else
+  echo "Not found"
+fi

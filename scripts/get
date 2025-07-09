@@ -1,0 +1,60 @@
+#!/bin/bash
+
+MONKYPE_DIR="$HOME/.local/share/monkype"
+DATASETS_DIR="$MONKYPE_DIR/datasets"
+
+RAW_LINK="https://raw.githubusercontent.com/monkeytypegame/monkeytype/refs/heads/master/frontend/static/languages"
+
+dataset_name="$1"
+if [ -z "$dataset_name" ]; then
+  echo "usage monkype-get <dataset>"
+  echo
+
+  if [ -n "$(ls $DATASETS_DIR)" ]; then
+    echo "Available datasets:"
+    for i in $(ls $DATASETS_DIR); do
+      echo "  * ${i:0:-4}"
+    done
+  else
+    echo "No available datates"
+  fi
+
+  echo
+  echo NOTE: Datset files are available at:
+  echo   https://github.com/monkeytypegame/monkeytype/blob/master/frontend/static/languages/
+
+  exit 1
+fi
+
+# Ensure datasets dir exists
+mkdir -p $DATASETS_DIR
+
+dataset_file="$DATASETS_DIR/$dataset_name.txt"
+
+if [ ! -f "$dataset_file" ]; then
+  echo "Downloading..."
+
+  tmp_file="$MONKYPE_DIR/tmp"
+  rm "$tmp_file" >/dev/null 2>&1
+  
+  wget "$RAW_LINK/${dataset_name}.json" -O "$tmp_file" >/dev/null 2>&1
+  status=$?
+
+  if [ $status -eq 0 ]; then
+    monkype-convert "$tmp_file" "$dataset_file"
+  else
+    echo "  * Can't download dataset '${dataset_name}'."
+  fi
+  
+  rm "$tmp_file" >/dev/null 2>&1
+fi
+
+cp "$dataset_file" "$MONKYPE_DIR/words.txt" >/dev/null 2>&1
+status=$?
+
+if [ $status -eq 0 ]; then
+  echo "Using dataset '$dataset_name'"
+else
+  echo "Couldn't get dataset."
+  exit 1
+fi

@@ -5,3 +5,6 @@ nodemon.json
 build.sh
 stats.csv
 .clangd
+TODO.txt
+changes.txt
+plot.py
