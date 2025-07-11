@@ -453,8 +453,8 @@ stats run_session(options opt) {
 
         } else if (IS_BACKSPACE(key)) {
           if (session.u_idx >= 0) {
-            u_word[session.u_idx] = NULL_BYTE;
             session.u_idx = MAX(0, session.u_idx - 1);
+            u_word[session.u_idx] = NULL_BYTE;
           }
         } else if (!is_special_key && session.u_idx < MAX_WORD_LENGTH - 1) {
           if (target_word[session.u_idx] == key)
