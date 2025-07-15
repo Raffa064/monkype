@@ -94,7 +94,7 @@ typedef struct {
   bool custom_seed;
   int word_count;
   int target_fps;
-  char dataset_name[256];
+  char *dataset_name;
   char *custom_dataset_path;
   char *output_csv_path;
   bool print_only;
@@ -119,6 +119,15 @@ char *get_data_dir() {
   }
 
   return path;
+}
+
+char *get_dataset_name(options opt) {
+  char *dataset_name = opt.dataset_name;
+
+  if (opt.custom_dataset_path)
+    dataset_name = "custom";
+
+  return dataset_name;
 }
 
 double get_wpm_stat(stats stats) {
@@ -147,6 +156,12 @@ double difftime_sec(timespec start, timespec end) {
 
 void close_ncurses() { endwin(); }
 
+void sig_handler() {
+  close_ncurses();
+  printf("Forced quit by signal\n");
+  exit(1);
+}
+
 void setup_ncurses() {
   initscr();
   noecho();
@@ -167,8 +182,10 @@ void setup_ncurses() {
   init_pair(EXTRA, COLOR_YELLOW, COLOR_BLACK);
   init_pair(CURSOR, COLOR_BLACK, COLOR_WHITE);
 
-  signal(SIGINT, close_ncurses);
-  signal(SIGTERM, close_ncurses);
+  signal(SIGINT, sig_handler);
+  signal(SIGTERM, sig_handler);
+  signal(SIGQUIT, sig_handler);
+  signal(SIGABRT, sig_handler);
 }
 
 int load_dataset(options opt) {
@@ -323,11 +340,11 @@ int p_size(int n) {
   return i;
 }
 
-void draw_stats(int x, int y, int w, stats stats) {
+void draw_stats(int x, int y, int w, options opt, stats stats) {
   double wpm = get_wpm_stat(stats);
   double accuracy = get_accuracy_stat(stats);
 
-  c_mvprintw(HEADER, y, x + 1, " %s ", "WORDED"); // mode name
+  c_mvprintw(HEADER, y, x + 1, " %s ", get_dataset_name(opt));
 
   int _stats[4][2] = {
       {CORRECT, stats.correct},     //
@@ -494,7 +511,7 @@ stats run_session(options opt) {
 
     draw_header(left, top, w, paused);
     draw_info(left, bottom - 1, show_word, target_word, show_fps, dt);
-    draw_stats(left, bottom, w, stats);
+    draw_stats(left, bottom, w, opt, stats);
 
     if (paused) {
       colored(HEADER, { draw_center_text(0, h - 3, w, L" Paused "); })
@@ -525,22 +542,26 @@ options get_cmdline_options(int argc, char **argv) {
   opt.custom_seed = false;
   opt.word_count = 10;
   opt.target_fps = 60;
+  opt.dataset_name = NULL;
   opt.custom_dataset_path = NULL;
   opt.output_csv_path = strcat(get_data_dir(), "/stats.txt");
   opt.print_only = false;
 
   char *dot_file_path = strcat(get_data_dir(), "/.dataset");
-  char dataset_name[256] = {0};
+  char df_dataset_name[256] = {0}; // diplayed in help text
   if (access(dot_file_path, F_OK) == 0) {
     FILE *dot_file = fopen(dot_file_path, "r");
 
-    fread(dataset_name, 1, sizeof(dataset_name), dot_file);
-    dataset_name[strcspn(dataset_name, "\n")] = NULL_BYTE; // remove line breaks
-    strcpy(opt.dataset_name, dataset_name);
+    fread(df_dataset_name, 1, sizeof(df_dataset_name), dot_file);
+    int eol = strcspn(df_dataset_name, "\n");
+    df_dataset_name[eol] = '\0'; // remove line breaks
+
+    opt.dataset_name = malloc(256 * sizeof(char));
+    strcpy(opt.dataset_name, df_dataset_name);
 
     fclose(dot_file);
   } else {
-    strcpy(dataset_name, "<None>");
+    strcpy(df_dataset_name, "<None>");
   }
 
   free(dot_file_path);
@@ -560,7 +581,7 @@ options get_cmdline_options(int argc, char **argv) {
     else if (strcmp(cmd, "-d") == 0)
       opt.custom_dataset_path = argv[++i];
     else if (strcmp(cmd, "-D") == 0)
-      strcpy(opt.dataset_name, argv[++i]);
+      strcpy(opt.dataset_name, argv[++i]); // override
     else if (strcmp(cmd, "--csv") == 0)
       strcpy(opt.output_csv_path, argv[++i]);
     else if (strcmp(cmd, "-p") == 0)
@@ -585,7 +606,7 @@ options get_cmdline_options(int argc, char **argv) {
              "  --csv <file>    Export session stats to a CSV file (default: "
              "~/.local/share/monkype/stats.csv)\n"
              "  -p              Print session word list only\n",
-             dataset_name);
+             df_dataset_name);
 
       exit(0);
     }
@@ -622,13 +643,10 @@ void print_results(options opt, stats stats) {
               "incorrect,missed,extra\n");
     }
 
-    char *dataset_name = opt.dataset_name;
-    if (opt.custom_dataset_path)
-      dataset_name = "custom";
-
     fprintf(file, "%ld,%s,%d,%d,%f,%f,%f,%d,%d,%d,%d\n", time(NULL),
-            dataset_name, opt.seed, opt.word_count, wpm, accuracy, stats.time,
-            stats.correct, stats.incorrect, stats.missed, stats.extra);
+            get_dataset_name(opt), opt.seed, opt.word_count, wpm, accuracy,
+            stats.time, stats.correct, stats.incorrect, stats.missed,
+            stats.extra);
 
     if (file == stdout)
       fclose(file);
@@ -663,5 +681,6 @@ int main(int argc, char **argv) {
       break;
   }
 
+  free(opt.dataset_name);
   free(opt.output_csv_path);
 }
