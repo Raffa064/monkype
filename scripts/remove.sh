@@ -1,5 +1,3 @@
-#!/bin/bash
-
 MONKYPE_DIR="$HOME/.local/share/monkype"
 DATASETS_DIR="$MONKYPE_DIR/datasets"
 

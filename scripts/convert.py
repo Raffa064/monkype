@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-
 # This is script is intent to convert monkeytype language json files to a simple words.txt with single word per line
 
 import sys

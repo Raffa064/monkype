@@ -1,5 +1,3 @@
-#!/bin/bash
-
 set -e
 
 if [ "$(id -u)" -ne 0 ]; then
@@ -7,9 +5,9 @@ if [ "$(id -u)" -ne 0 ]; then
 fi
 
 echo -e "\e[33m[!]\e[0m Uninstalling monkype executable..."
-rm /usr/local/bin/monkype
+rm $MONKYPE_INSTALL_DIR/monkype
 
 echo -e "\e[33m[!]\e[0m Uninstalling scripts..."
-rm /usr/local/bin/monkype-*
+rm $MONKYPE_INSTALL_DIR/monkype-*
 
 echo -e "\e[34mFinished. Good bye!\e[0m"

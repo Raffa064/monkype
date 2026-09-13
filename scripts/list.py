@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-
 # This script is exported as monkype-list, and is used to list datasets from Monkey Type's github
 
 import requests

@@ -1,0 +1,10 @@
+    ..
+    .git
+    assets
+    build
+    scripts
+  -  .gitignore
+  -  Explorer
+  -  main.c
+  -  Makefile
+  -  README.md
