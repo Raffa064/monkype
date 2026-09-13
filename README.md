@@ -15,12 +15,10 @@ To install monkype on your device, follow these steps:
 git clone --depth 1 https://github.com/Raffa064/monkype.git
 cd monkype
 ```
-**2. Run installation script**
+**2. Run installation command**
 ```bash
-sudo ./install.sh
+make install PREFIX=~/.local
 ```
-> [!IMPORTANT]
-This script will build, and copy monkype executable to your /usr/local/bin folder, which is way it requires sudo
 
 **3. Managing datasets**
 
